@@ -1,0 +1,26 @@
+{
+  "name": "drago-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord per server Warframe — traccia attività vocali, messaggi e invia report settimanali.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "deploy-commands": "node src/deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "sql.js": "^1.12.0",
+    "nodemailer": "^6.9.8",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.1",
+    "moment": "^2.30.1",
+    "moment-timezone": "^0.5.45"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
