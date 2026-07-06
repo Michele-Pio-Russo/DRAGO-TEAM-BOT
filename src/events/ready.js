@@ -1,8 +1,9 @@
 // src/events/ready.js — Avvio bot e scheduler report settimanale
 const { Events, ActivityType } = require('discord.js');
 const cron = require('node-cron');
-const { getWeeklyData, saveReportRecord } = require('../database');
+const { getWeeklyData, saveReportRecord, getMeta, setMeta } = require('../database');
 const { sendWeeklyReport } = require('../mailer');
+const { runInactiveCheck } = require('../inactiveUsers');
 const { getWeekStart, getWeekEnd } = require('../utils');
 const moment = require('moment-timezone');
 require('moment/locale/it');
@@ -74,5 +75,55 @@ module.exports = {
     }, { timezone: 'Europe/Rome' });
 
     console.log('[CRON] Scheduler report settimanale attivo (Lunedì 09:00 Europe/Rome)');
+
+    // ─── Cron: Avviso automatico utenti inattivi ─────────────────────────
+    // Non esiste una sintassi cron nativa per "ogni 30 giorni esatti", quindi
+    // giriamo un controllo ogni giorno alle 09:30 e verifichiamo noi se sono
+    // passati abbastanza giorni dall'ultima esecuzione automatica. La data
+    // dell'ultima esecuzione è salvata nel database (tabella bot_meta), così
+    // il conteggio sopravvive ai redeploy/riavvii del bot su Railway.
+    const autoEnabled     = process.env.INACTIVE_AUTO_ENABLED === 'true';
+    const autoChannelId   = process.env.INACTIVE_AUTO_CHANNEL_ID || null;
+    const autoIntervalDays = parseInt(process.env.INACTIVE_AUTO_INTERVAL_DAYS) || 30;
+    const autoThresholdDays = parseInt(process.env.INACTIVE_DAYS_DEFAULT) || 30;
+    const autoDmMsg = process.env.INACTIVE_DM_MESSAGE || null;
+
+    if (autoEnabled && !autoChannelId) {
+      console.warn('[CRON] ⚠️ INACTIVE_AUTO_ENABLED=true ma INACTIVE_AUTO_CHANNEL_ID non impostato: avviso automatico disattivato.');
+    }
+
+    if (autoEnabled && autoChannelId) {
+      cron.schedule('30 9 * * *', async () => {
+        for (const [, guild] of client.guilds.cache) {
+          const metaKey = `last_auto_inactive_check_${guild.id}`;
+          const lastRun = parseInt(getMeta(metaKey)) || 0;
+          const dueAt   = lastRun + autoIntervalDays * 86_400_000;
+
+          if (Date.now() < dueAt) continue; // non è ancora ora
+
+          try {
+            const channel = await client.channels.fetch(autoChannelId);
+            const result = await runInactiveCheck({
+              guild,
+              days: autoThresholdDays,
+              summaryChannel: channel,
+              customMsg: autoDmMsg,
+              sendDMs: true,
+            });
+            setMeta(metaKey, Date.now());
+            console.log(
+              `[CRON] Avviso automatico inattivi per ${guild.name}: ` +
+              `${result.sent} inviati, ${result.skipped} saltati, ${result.failed} falliti.`
+            );
+          } catch (err) {
+            console.error(`[CRON] Errore avviso automatico inattivi per ${guild.name}:`, err.message);
+          }
+        }
+      }, { timezone: 'Europe/Rome' });
+
+      console.log(`[CRON] Scheduler avviso inattivi attivo (ogni ${autoIntervalDays} giorni, controllo giornaliero alle 09:30 Europe/Rome)`);
+    } else {
+      console.log('[CRON] Avviso automatico inattivi disattivato (INACTIVE_AUTO_ENABLED non impostato su "true")');
+    }
   },
 };

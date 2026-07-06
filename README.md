@@ -284,6 +284,28 @@ INACTIVE_DM_COOLDOWN_DAYS=30      # Giorni minimi tra un DM e il successivo allo
 INACTIVE_DM_MESSAGE=Ciao Tenno!   # Testo aggiuntivo nel DM (opzionale)
 ```
 
+### 🔁 Avviso automatico ricorrente (senza comando manuale)
+
+Oltre al comando `/inattivi` da lanciare a mano, il bot può eseguire l'avviso **in automatico ogni N giorni**, senza bisogno che un admin lo richiami ogni volta.
+
+Funzionamento: il bot controlla ogni giorno alle 09:30 (Europe/Rome) se sono passati abbastanza giorni dall'ultima esecuzione automatica. La data dell'ultima esecuzione è salvata nel database (non in memoria), quindi **il conteggio non si azzera** se il bot viene riavviato o ridistribuito su Railway.
+
+Per attivarlo, imposta queste variabili (in `.env` o nelle Variables di Railway):
+
+```env
+INACTIVE_AUTO_ENABLED=true
+INACTIVE_AUTO_CHANNEL_ID=1234567890123456789   # ID del canale dove postare il riepilogo
+INACTIVE_AUTO_INTERVAL_DAYS=30                 # ogni quanti giorni ripetere (default 30)
+```
+
+Per trovare l'ID del canale: attiva la **Modalità sviluppatore** in Discord (Impostazioni utente → Avanzate), poi tasto destro sul canale → **Copia ID canale**.
+
+Riutilizza automaticamente `INACTIVE_DAYS_DEFAULT` come soglia di inattività e `INACTIVE_DM_MESSAGE` come messaggio personalizzato nel DM — le stesse variabili usate dal comando manuale.
+
+Per disattivarlo di nuovo, basta rimettere `INACTIVE_AUTO_ENABLED=false` (o rimuovere la variabile) e fare redeploy.
+
+
+
 ### Come funziona
 
 1. Confronta `voice_sessions` nel DB con i membri attuali del server

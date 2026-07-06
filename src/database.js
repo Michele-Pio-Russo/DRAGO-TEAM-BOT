@@ -107,6 +107,15 @@ async function initDb() {
       PRIMARY KEY (user_id, guild_id)
     )
   `);
+  // Tabella chiave/valore generica, usata ad es. per ricordare l'ultima
+  // esecuzione automatica del controllo inattivi (sopravvive ai redeploy
+  // perché salvata nel database persistente, non in memoria).
+  db.run(`
+    CREATE TABLE IF NOT EXISTS bot_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    )
+  `);
 
   db.run('CREATE INDEX IF NOT EXISTS idx_voice_user ON voice_sessions(user_id, guild_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_voice_time ON voice_sessions(join_time)');
@@ -295,6 +304,21 @@ function getLastInactiveDM(userId, guildId) {
   return row ? row.sent_at : null;
 }
 
+// ─── META (chiave/valore generico) ─────────────────────────────────────────
+
+function getMeta(key) {
+  const row = queryGet('SELECT value FROM bot_meta WHERE key = ?', [key]);
+  return row ? row.value : null;
+}
+
+function setMeta(key, value) {
+  run(
+    `INSERT INTO bot_meta (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, String(value)]
+  );
+}
+
 module.exports = {
   initDb,
   voiceJoin, voiceLeave, voiceMove,
@@ -306,4 +330,6 @@ module.exports = {
   getInactiveVoiceUsers,
   logInactiveDM,
   getLastInactiveDM,
+  getMeta,
+  setMeta,
 };
