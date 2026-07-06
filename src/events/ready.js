@@ -96,7 +96,22 @@ module.exports = {
       cron.schedule('30 9 * * *', async () => {
         for (const [, guild] of client.guilds.cache) {
           const metaKey = `last_auto_inactive_check_${guild.id}`;
-          const lastRun = parseInt(getMeta(metaKey)) || 0;
+          const lastRunRaw = getMeta(metaKey);
+
+          // Prima esecuzione in assoluto per questo server: non è ancora
+          // mai partito nessun controllo automatico. Invece di considerare
+          // "0" (1 gennaio 1970) come ultima esecuzione — il che farebbe
+          // scattare l'invio subito, pensando siano passati decenni —
+          // salviamo semplicemente "adesso" come punto di partenza e
+          // aspettiamo il primo vero ciclo di INACTIVE_AUTO_INTERVAL_DAYS
+          // giorni da oggi.
+          if (lastRunRaw === null) {
+            setMeta(metaKey, Date.now());
+            console.log(`[CRON] Primo avvio scheduler inattivi per ${guild.name}: prossimo controllo tra ${autoIntervalDays} giorni.`);
+            continue;
+          }
+
+          const lastRun = parseInt(lastRunRaw) || 0;
           const dueAt   = lastRun + autoIntervalDays * 86_400_000;
 
           if (Date.now() < dueAt) continue; // non è ancora ora

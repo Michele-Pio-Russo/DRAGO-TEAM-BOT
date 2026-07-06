@@ -123,6 +123,15 @@ async function initDb() {
   db.run('CREATE INDEX IF NOT EXISTS idx_msg_time   ON message_stats(timestamp)');
 
   saveDb();
+
+  // Registra la data di prima installazione/avvio del bot, una sola volta.
+  // Serve come riferimento per non segnalare come "mai entrato" chi in
+  // realtà il bot non ha ancora avuto il tempo di osservare (vedi
+  // src/inactiveUsers.js — periodo di rodaggio).
+  if (getMeta('installed_at') === null) {
+    setMeta('installed_at', Date.now());
+  }
+
   console.log('[DB] Database inizializzato correttamente');
 }
 

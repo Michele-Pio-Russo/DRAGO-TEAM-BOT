@@ -3,7 +3,7 @@
 // dallo scheduler automatico in src/events/ready.js, per evitare di
 // duplicare la stessa logica in due punti diversi.
 const { EmbedBuilder } = require('discord.js');
-const { getInactiveVoiceUsers, logInactiveDM, getLastInactiveDM } = require('./database');
+const { getInactiveVoiceUsers, logInactiveDM, getLastInactiveDM, getMeta } = require('./database');
 const { COLORS } = require('./utils');
 
 const COOLDOWN_DAYS = parseInt(process.env.INACTIVE_DM_COOLDOWN_DAYS) || 30;
@@ -30,6 +30,16 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
   const dbInactiveMap = new Map(dbInactive.map(r => [r.user_id, r.last_seen]));
   const dbTrackedIds = new Set(dbInactive.map(r => r.user_id));
 
+  // ─── Periodo di rodaggio ────────────────────────────────────────────────
+  // Se il bot è stato installato da meno giorni della soglia di inattività
+  // richiesta, non possiamo sapere con certezza chi sia davvero "mai
+  // entrato" in vocale: potrebbe semplicemente non essere ancora stato
+  // osservato. In questo caso escludiamo del tutto i "mai visti" dalla
+  // lista, per evitare falsi positivi nei primi giorni dopo l'installazione.
+  const installedAt = parseInt(getMeta('installed_at')) || Date.now();
+  const botAgeMs = Date.now() - installedAt;
+  const inGracePeriod = botAgeMs < days * 86_400_000;
+
   const inactiveList = [];
   for (const [, member] of allMembers) {
     if (member.user.bot) continue;
@@ -39,7 +49,7 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
         member, lastSeen, neverSeen: false,
         daysSince: Math.floor((Date.now() - lastSeen) / 86_400_000),
       });
-    } else if (!dbTrackedIds.has(member.id)) {
+    } else if (!dbTrackedIds.has(member.id) && !inGracePeriod) {
       inactiveList.push({ member, lastSeen: null, neverSeen: true, daysSince: null });
     }
   }
