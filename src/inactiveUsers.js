@@ -2,9 +2,10 @@
 // inattivi nei canali vocali. Usata sia dal comando manuale /inattivi sia
 // dallo scheduler automatico in src/events/ready.js, per evitare di
 // duplicare la stessa logica in due punti diversi.
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { getInactiveVoiceUsers, logInactiveDM, getLastInactiveDM, getMeta } = require('./database');
 const { COLORS } = require('./utils');
+const { resolveConfiguredClip, fetchClipAttachment, randomClip } = require('./stalkerAudio');
 
 const COOLDOWN_DAYS = parseInt(process.env.INACTIVE_DM_COOLDOWN_DAYS) || 30;
 
@@ -62,6 +63,43 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
 
   const results = { sent: 0, failed: 0, skipped: 0, failedNames: [] };
 
+  // ─── Audio Stalker (opzionale, se configurato con /imposta-audio-inattivita) ─
+  // Modalità "fisso": stessa clip per tutti, scaricata una sola volta.
+  // Modalità "random": una clip diversa per ciascun utente; le clip già
+  // scaricate vengono messe in cache per non riscaricare più volte la stessa.
+  let audioConfig = null;
+  let fixedAttachment = null;
+  const audioCache = new Map(); // clip.id -> Buffer
+
+  if (sendDMs) {
+    audioConfig = resolveConfiguredClip(guild.id, getMeta);
+    if (audioConfig && !audioConfig.random) {
+      try {
+        fixedAttachment = await fetchClipAttachment(audioConfig.clip);
+      } catch (err) {
+        console.error('[INATTIVI] Audio configurato non scaricabile, proseguo senza audio:', err.message);
+        fixedAttachment = null;
+      }
+    }
+  }
+
+  async function resolveAttachmentForSend() {
+    if (!audioConfig) return null;
+    if (!audioConfig.random) return fixedAttachment;
+
+    const clip = randomClip();
+    try {
+      if (!audioCache.has(clip.id)) {
+        const built = await fetchClipAttachment(clip);
+        audioCache.set(clip.id, built.attachment);
+      }
+      return new AttachmentBuilder(audioCache.get(clip.id), { name: `stalker-${clip.id}.ogg` });
+    } catch (err) {
+      console.error('[INATTIVI] Audio casuale non scaricabile, invio senza audio:', err.message);
+      return null;
+    }
+  }
+
   if (sendDMs) {
     for (const u of inactiveList) {
       const lastDM = getLastInactiveDM(u.member.id, guild.id);
@@ -70,8 +108,9 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
         continue;
       }
       const dmEmbed = buildDMEmbed(u, guild, days, customMsg);
+      const audioAttachment = await resolveAttachmentForSend();
       try {
-        await u.member.send({ embeds: [dmEmbed] });
+        await u.member.send({ embeds: [dmEmbed], files: audioAttachment ? [audioAttachment] : [] });
         logInactiveDM(u.member.id, guild.id);
         results.sent++;
       } catch {
