@@ -297,6 +297,23 @@ function getInactiveVoiceUsers(guildId, since) {
   );
 }
 
+// Tutti gli utenti con ALMENO una sessione vocale (recente o vecchia) oppure
+// attualmente connessi: serve a distinguere "mai entrato" da "attivo di recente".
+function getAllVoiceTrackedUserIds(guildId) {
+  const rows = queryAll(
+    `SELECT DISTINCT user_id FROM voice_sessions WHERE guild_id = ?
+     UNION
+     SELECT user_id FROM active_voice WHERE guild_id = ?`,
+    [guildId, guildId]
+  );
+  return rows.map(r => r.user_id);
+}
+
+// Utenti attualmente connessi in un canale vocale (sono attivi per definizione).
+function getCurrentlyInVoiceUserIds(guildId) {
+  return queryAll('SELECT user_id FROM active_voice WHERE guild_id = ?', [guildId]).map(r => r.user_id);
+}
+
 function logInactiveDM(userId, guildId) {
   run(
     `INSERT INTO inactive_dm_log (user_id, guild_id, sent_at) VALUES (?, ?, ?)
@@ -337,6 +354,8 @@ module.exports = {
   getWeeklyData,
   saveReportRecord,
   getInactiveVoiceUsers,
+  getAllVoiceTrackedUserIds,
+  getCurrentlyInVoiceUserIds,
   logInactiveDM,
   getLastInactiveDM,
   getMeta,

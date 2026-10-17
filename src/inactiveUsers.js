@@ -3,7 +3,10 @@
 // dallo scheduler automatico in src/events/ready.js, per evitare di
 // duplicare la stessa logica in due punti diversi.
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { getInactiveVoiceUsers, logInactiveDM, getLastInactiveDM, getMeta } = require('./database');
+const {
+  getInactiveVoiceUsers, getAllVoiceTrackedUserIds, getCurrentlyInVoiceUserIds,
+  logInactiveDM, getLastInactiveDM, getMeta,
+} = require('./database');
 const { COLORS } = require('./utils');
 const { resolveConfiguredClip, fetchClipAttachment, randomClip } = require('./stalkerAudio');
 
@@ -29,7 +32,11 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
 
   const dbInactive = getInactiveVoiceUsers(guild.id, since);
   const dbInactiveMap = new Map(dbInactive.map(r => [r.user_id, r.last_seen]));
-  const dbTrackedIds = new Set(dbInactive.map(r => r.user_id));
+  // BUGFIX: prima questo set conteneva solo gli utenti INATTIVI, quindi chi era
+  // stato in vocale di recente non risultava "tracciato" e veniva scambiato per
+  // "mai entrato". Ora contiene chiunque abbia almeno una sessione, anche recente.
+  const dbTrackedIds = new Set(getAllVoiceTrackedUserIds(guild.id));
+  const inVoiceNow = new Set(getCurrentlyInVoiceUserIds(guild.id));
 
   // ─── Periodo di rodaggio ────────────────────────────────────────────────
   // Se il bot è stato installato da meno giorni della soglia di inattività
@@ -44,6 +51,7 @@ async function runInactiveCheck({ guild, days, summaryChannel = null, customMsg 
   const inactiveList = [];
   for (const [, member] of allMembers) {
     if (member.user.bot) continue;
+    if (inVoiceNow.has(member.id)) continue; // è in vocale adesso: attivo
     const lastSeen = dbInactiveMap.get(member.id);
     if (lastSeen !== undefined) {
       inactiveList.push({
