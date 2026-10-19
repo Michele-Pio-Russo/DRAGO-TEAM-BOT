@@ -4,6 +4,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { COLORS, isAdmin } = require('../utils');
 const { runAudioPicker, fetchClipAttachment } = require('../stalkerAudio');
+const { headingBlock } = require('../discordText');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -23,6 +24,7 @@ module.exports = {
     .addStringOption(opt =>
       opt.setName('messaggio')
          .setDescription('Testo del messaggio da inviare')
+         .setMaxLength(3500)
          .setRequired(true))
     .addUserOption(opt =>
       opt.setName('utente')
@@ -34,7 +36,8 @@ module.exports = {
          .setRequired(false))
     .addStringOption(opt =>
       opt.setName('titolo')
-         .setDescription('Titolo personalizzato del messaggio (opzionale)')
+         .setDescription('Titolo del messaggio, mostrato in grande (opzionale)')
+         .setMaxLength(100)
          .setRequired(false))
     .addBooleanOption(opt =>
       opt.setName('conferma')
@@ -191,8 +194,9 @@ module.exports = {
     // ─── Invio DM (anonimo, a nome del bot) ───────────────────────────────
     const dmEmbed = new EmbedBuilder()
       .setColor(COLORS.primary)
-      .setTitle(titolo)
-      .setDescription(testo)
+      // Il titolo dell'embed è sempre piccolo: lo scriviamo come titolo grande ("# ")
+      // nella prima riga della descrizione, dove Discord accetta la formattazione.
+      .setDescription(headingBlock(titolo, testo))
       .setFooter({ text: 'DRAGO BOT • Warframe Tracker' })
       .setTimestamp();
 
